@@ -1,13 +1,17 @@
-Health Check
+# Description
+This is an implementation of a common concern.  Being able to asynchronously process tasks using task workers, spread the processing across more than 1 process regardless of location of worker.
 
-Bash
+NATs core allows us to do this very elegantly.  Workers can be anywhere on the network, and can connect to the NATs server to receive tasks for completion.
 
-# Check if the API server is responding
+MongoDB is used to keep track of task creation and completion and status and parameters passed in for reference.
+
+# Health Check
+Check if the API server is responding
+
 curl http://localhost:8080/health
 # Expected: {"status":"ok"}
-2. Submit Tasks
 
-Bash
+# Submit Tasks
 
 # Submit a "quick_job" task
 # Note the response, especially the "taskId"
