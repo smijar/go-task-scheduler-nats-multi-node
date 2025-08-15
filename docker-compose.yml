@@ -1,0 +1,77 @@
+# docker-compose.yml
+# Version with separate server and worker services
+version: '3.8'
+
+services:
+  # NATS Server with JetStream Enabled
+  nats:
+    image: nats:2.10.17-alpine
+    ports:
+      - "4222:4222" # Client port
+      - "8222:8222" # Monitoring port (optional)
+    command: "-js -m 8222" # Enable JetStream (-js) and HTTP monitoring (-m)
+    volumes:
+      - nats_data:/data # Persist JetStream data
+    healthcheck:
+      test: ["CMD", "nats-server", "--version"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  # MongoDB Server
+  mongo:
+    image: mongo:6.0.2
+    ports:
+      - "27017:27017" # Default MongoDB port
+    volumes:
+      - mongo_data:/data/db # Persist MongoDB data
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongo localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 3
+
+  # Task Scheduler Server
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "8080:8080" # API port
+    depends_on:
+      - nats
+      - mongo
+    environment:
+      - NATS_URL=nats://nats:4222
+      - MONGO_URI=mongodb://mongo:27017
+      - MONGO_DB_NAME=task_scheduler_db
+      - MONGO_COLL_NAME=tasks
+      - NATS_TASK_SUBJECT=tasks.process
+      - NATS_RESP_SUBJECT=tasks.result
+      - NATS_QUEUE_GROUP=task-workers
+      - SUBMIT_RATE_LIMIT_PER_SEC=5.0
+      - API_PORT=8080
+    restart: unless-stopped
+
+  # Worker instances (can be scaled)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      - nats
+      - mongo
+      - scheduler
+    environment:
+      - NATS_URL=nats://nats:4222
+      - NATS_TASK_SUBJECT=tasks.process
+      - NATS_RESP_SUBJECT=tasks.result
+      - NATS_QUEUE_GROUP=task-workers
+      - MAX_CONCURRENT_TASKS=5
+    deploy:
+      replicas: 3  # Start with 3 worker instances
+    restart: unless-stopped
+
+volumes:
+  nats_data:
+  mongo_data:

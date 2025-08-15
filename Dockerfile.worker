@@ -1,0 +1,24 @@
+FROM golang:1.20-alpine AS builder
+
+WORKDIR /app
+
+# Copy go.mod and go.sum files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy the entire codebase
+COPY . .
+
+# Build the worker
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/bin/task-worker ./cmd/worker
+
+# Use a small alpine image for the final container
+FROM alpine:3.17
+
+WORKDIR /app
+
+# Copy the binary from the builder stage
+COPY --from=builder /app/bin/task-worker .
+
+# Run the worker
+CMD ["./task-worker"]
